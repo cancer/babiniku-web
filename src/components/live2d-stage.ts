@@ -1,22 +1,20 @@
 import type { Face } from "@tensorflow-models/face-detection";
-import { bindModelToStage, render } from "../libs/live2d/index";
-import { fetchModelData } from "../libs/live2d/fetcher.ts";
-import { createStage } from "../libs/live2d/stage.js";
+import { ModelData } from "../libs/live2d/fetcher.ts";
+import { bindModelToStage, createModel, initializeCubism, render } from "../libs/live2d/index";
+import { createStage } from "../libs/stage";
 import type { Timer } from "../libs/util.ts";
 
 type Props = {
   timer: Timer;
   id: string;
-  model: string;
+  modelData: ModelData;
   estimateFaces: () => Promise<Face[]>;
-  modelLoaded: () => void;
 };
 export const Live2dStage = ({
   timer,
   id,
-  model,
+  modelData,
   estimateFaces,
-  modelLoaded,
 }: Props) => {
   // 描画ステージの作成
   const { canvas: el, gl } = createStage({
@@ -26,25 +24,27 @@ export const Live2dStage = ({
   });
   const viewport = [0, 0, el.width, el.height];
 
-  fetchModelData(model)
-    .then(({ modelSetting, ...binaries }) =>
-      // Live2dモデルをWebGLのステージにバインド
-      bindModelToStage(el, viewport, modelSetting, binaries, {
-        autoBlink: false,
-        x: 0,
-        y: 0,
-        scale: 3,
-      }),
-    )
-    .then(({ model: modelContainer }) =>
-      // face detectionの結果に応じてモデルを動かす
-      estimateFaces().then((faces) => {
-        modelLoaded();
-        // 顔が検出できてない
-        if (faces.length === 0) return;
-        return render(gl, viewport, modelContainer, faces[0].keypoints, timer);
-      }),
-    );
+  initializeCubism();
+
+  estimateFaces().then((faces) => {
+    // 顔が検出できてない
+    if (faces.length === 0) return;
+
+    // Live2dモデルをつくって
+    const { model, resize } = createModel({
+      data: modelData,
+      position: { z: 3 },
+    });
+    // それをWebGLにバインド
+    if (model.getRenderer() === null) {
+      bindModelToStage(gl, model, modelData.textures, viewport);
+      resize({ width: el.width, height: el.height });
+      window.onresize = () => resize({ width: el.width, height: el.height });
+    }
+
+    // 検出した顔に合わせてモデルを動かす
+    render(gl, viewport, model, faces[0].keypoints, timer);
+  });
 
   return {
     render(app: HTMLElement) {

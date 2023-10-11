@@ -4,6 +4,7 @@ import { provideCameraStream } from "./src/libs/camera.js";
 import { provideDetector } from "./src/libs/face-detection.js";
 import { Camera } from "./src/components/camera.js";
 import { Live2dStage } from "./src/components/live2d-stage.ts";
+import { fetchModelData } from "./src/libs/live2d/fetcher.ts";
 import { timer } from "./src/libs/util.js";
 import { Loading } from "./src/components/loading.js";
 
@@ -50,15 +51,16 @@ const loop = async () => {
 
   try {
     const props = {
-      model: "/mao_pro_t02.model3.json",
+      modelData: await fetchModelData("/mao_pro_t02.model3.json"),
       timer: _timer,
       id: "stage",
-      estimateFaces: () => {
-        if (camera === null) return Promise.resolve([]);
-        if (detector === null) return Promise.resolve([]);
-        return detector.estimateFaces(camera.ref());
+      estimateFaces: async () => {
+        if (camera === null) return [];
+        if (detector === null) return [];
+        const faces = await detector.estimateFaces(camera.ref());
+        loading.destroy(app);
+        return faces;
       },
-      modelLoaded: () => loading.destroy(app),
     };
     const live2dStage = Live2dStage(props);
     live2dStage.render(app);

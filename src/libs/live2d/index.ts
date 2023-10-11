@@ -1,93 +1,112 @@
+import type { Keypoint } from "@tensorflow-models/face-detection";
 import $debug from "debug";
-import { Keypoint } from "@tensorflow-models/face-detection";
+import { LogLevel } from "../cubism-web/Framework/live2dcubismframework";
 import { calcFace, stabilizeBlink } from "../face-detection.js";
 import { getLerp } from "../util.js";
 import AppCubismUserModel from "./CubismModel";
 import {
-  CubismEyeBlink,
   CubismFramework,
   CubismMatrix44,
   CubismModelSettingJson,
 } from "./Live2dSDK";
 
-interface AvatarArrayBuffers {
-  moc3: ArrayBuffer;
-  textures: Blob[];
-  physics: ArrayBuffer;
-}
-interface Live2dRendererOption {
-  autoBlink: boolean;
-  x: number;
-  y: number;
-  scale: number;
-}
-const DEFAULT_OPTION: Live2dRendererOption = {
-  autoBlink: true,
-  x: 0,
-  y: 0,
-  scale: 1,
+const debug = $debug("app:live2d");
+
+/**
+ * Cubism Frameworkの初期化
+ */
+export const initializeCubism = () => {
+  if (!CubismFramework.isStarted()) {
+    CubismFramework.startUp({
+      logFunction: (msg) => debug(msg),
+      loggingLevel: LogLevel.LogLevel_Debug,
+    });
+    if (CubismFramework.isInitialized()) return;
+    CubismFramework.initialize();
+  }
 };
 
-const debug = $debug("app:live2d");
-const modelCache = new Map();
-
-export const bindModelToStage = async (
-  canvas: HTMLCanvasElement,
-  viewport: number[],
-  modelSetting: CubismModelSettingJson,
-  buffers: AvatarArrayBuffers,
-  options: Partial<Live2dRendererOption> = {},
-) => {
+type ModelData = {
+  modelSetting: CubismModelSettingJson;
+  moc3: ArrayBuffer;
+  physics: ArrayBuffer;
+  textures: HTMLImageElement[];
+};
+const modelCache: Map<string, AppCubismUserModel> = new Map();
+const DEFAULT_POSITION = {
+  x: 0,
+  y: 0,
+  z: 1,
+};
+/**
+ * Live2dモデルのロードと初期設定
+ */
+type CreateModel = (params: {
+  data: ModelData;
+  position: Partial<{ x: number; y: number; z: number }>;
+}) => {
+  model: AppCubismUserModel;
+  resize: (canvasRect: { width: number; height: number }) => void;
+};
+export const createModel: CreateModel = ({
+  data: { modelSetting, moc3, physics },
+  position = DEFAULT_POSITION,
+}) => {
   const modelName = modelSetting.getModelFileName();
   const cachedModel = modelCache.get(modelName);
   if (cachedModel !== undefined) {
-    debug("modelCache hit %o", cachedModel);
-    return { model: cachedModel };
+    debug("model cache hit. %o", cachedModel);
+    return {
+      model: cachedModel,
+      resize: getResizer(cachedModel, { ...DEFAULT_POSITION, ...position }),
+    };
   }
 
-  debug("bindModelToStage()");
-
-  /**
-   * WebGLコンテキストの初期化
-   */
-
-  const gl = canvas.getContext("webgl");
-  if (gl === null) throw new Error("WebGL未対応のブラウザです。");
-
-  const option = Object.assign({}, DEFAULT_OPTION, options);
-
-  // フレームバッファを用意
-  const frameBuffer: WebGLFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING);
-
-  /**
-   * Frameworkの初期化
-   */
-  CubismFramework.startUp();
-  CubismFramework.initialize();
-
-  // const modelSetting = new CubismModelSettingJson(
-  //   _model,
-  //   _model.byteLength,
-  // ) as ICubismModelSetting;
-
-  const {
-    moc3: moc3ArrayBuffer,
-    textures,
-    physics: physics3ArrayBuffer,
-  } = buffers;
-  /**
-   * Live2Dモデルの作成と設定
-   */
+  debug("createModel(%o)", { modelSetting, moc3, physics, position });
 
   const model = new AppCubismUserModel();
+
   // モデルデータをロード
-  model.loadModel(moc3ArrayBuffer);
+  model.loadModel(moc3);
+
+  const { eyeBlinks, lipSyncs } = getParameterIds(modelSetting);
+
+  // 目ぱちIDをモデルに紐づけ
+  for (const id of eyeBlinks) model.addEyeBlinkParameterId(id);
+
+  // 口パクIDをモデルに紐づけ
+  for (const id of lipSyncs) model.addLipSyncParameterId(id);
+
+  // 物理演算設定
+  model.loadPhysics(physics, physics.byteLength);
+
+  modelCache.set(modelName, model);
+  return {
+    model,
+    resize: getResizer(model, { ...DEFAULT_POSITION, ...position }),
+  };
+};
+
+type BindModelToStage = (
+  gl: WebGLRenderingContext,
+  model: AppCubismUserModel,
+  textures: HTMLImageElement[],
+  viewport: number[],
+) => void;
+export const bindModelToStage: BindModelToStage = (
+  gl,
+  model,
+  textures,
+  viewport,
+) => {
+  debug("bindModelToStage(%o)", { gl, model, textures, viewport });
+
   // レンダラの作成（bindTextureより先にやっておく）
   model.createRenderer();
   // テクスチャをレンダラに設定
   let i = 0;
-  for (let buffer of textures) {
-    const texture = await createTexture(buffer, gl);
+  for (let img of textures) {
+    const texture = createTexture(img, gl);
     model.getRenderer().bindTexture(i, texture);
     i++;
   }
@@ -95,78 +114,10 @@ export const bindModelToStage = async (
   model.getRenderer().setIsPremultipliedAlpha(true);
   model.getRenderer().startUp(gl);
 
-  // 自動目ぱち設定
-  if (option.autoBlink) {
-    model.setEyeBlink(CubismEyeBlink.create(modelSetting));
-  }
-
-  // モーションに適用する目ぱち用IDを設定
-  for (
-    let i = 0, len = modelSetting.getEyeBlinkParameterCount();
-    i < len;
-    i++
-  ) {
-    model.addEyeBlinkParameterId(modelSetting.getEyeBlinkParameterId(i));
-  }
-  // モーションに適用する口パク用IDを設定
-  for (let i = 0, len = modelSetting.getLipSyncParameterCount(); i < len; i++) {
-    model.addLipSyncParameterId(modelSetting.getLipSyncParameterId(i));
-  }
-  // 物理演算設定
-  model.loadPhysics(physics3ArrayBuffer, physics3ArrayBuffer.byteLength);
-  /**
-   * Live2Dモデルのサイズ調整
-   */
-  const defaultPosition = Object.assign(
-    {
-      x: 0,
-      y: 0,
-      z: 1,
-    },
-    {
-      x: option.x,
-      y: option.y,
-      z: option.scale,
-    },
-  );
-  const projectionMatrix = new CubismMatrix44();
-  const resizeModel = () => {
-    canvas.width = (canvas.clientWidth | canvas.width) * devicePixelRatio;
-    canvas.height = (canvas.clientHeight | canvas.height) * devicePixelRatio;
-
-    // NOTE: modelMatrixは、モデルのユニット単位での幅と高さが1×1に収まるように縮めようとしている？
-    const modelMatrix = model.getModelMatrix();
-    modelMatrix.bottom(0);
-    modelMatrix.centerY(-1);
-    modelMatrix.translateY(-1);
-    projectionMatrix.loadIdentity();
-    const canvasRatio = canvas.height / canvas.width;
-    if (1 < canvasRatio) {
-      // モデルが横にはみ出る時は、HTMLキャンバスの幅で合わせる
-      modelMatrix.scale(1, canvas.width / canvas.height);
-    } else {
-      // モデルが上にはみ出る時は、HTMLキャンバスの高さで合わせる（スマホのランドスケープモードとか）
-      modelMatrix.scale(canvas.height / canvas.width, 1);
-    }
-    modelMatrix.translateRelative(defaultPosition.x, defaultPosition.y);
-    // モデルが良い感じの大きさになるように拡大・縮小
-    projectionMatrix.multiplyByMatrix(modelMatrix);
-    const scale = defaultPosition.z;
-    projectionMatrix.scaleRelative(scale, scale);
-    model.getRenderer().setMvpMatrix(projectionMatrix);
-  };
-  resizeModel();
-
   // フレームバッファとビューポートを、フレームワーク設定
-  model.getRenderer().setRenderState(frameBuffer, viewport);
-
-  window.onresize = () => {
-    resizeModel();
-  };
-
-  debug("model setup done %o", model);
-  modelCache.set(modelName, model);
-  return { model };
+  model
+    .getRenderer()
+    .setRenderState(gl.getParameter(gl.FRAMEBUFFER_BINDING), viewport);
 };
 
 export const render = (
@@ -354,46 +305,86 @@ export const render = (
 };
 
 /**
- * テクスチャを生成する
- * @param {Blob} blob
- * @param {WebGLRenderingContext} gl
+ * Live2Dモデルのサイズ調整用関数
  */
-async function createTexture(
-  blob: Blob,
+const getResizer = (
+  model: AppCubismUserModel,
+  position: { x: number; y: number; z: number },
+) => {
+  const projectionMatrix = new CubismMatrix44();
+  return (canvasRect: { width: number; height: number }) => {
+    const modelMatrix = model.getModelMatrix();
+    modelMatrix.bottom(0);
+    modelMatrix.centerY(-1);
+    modelMatrix.translateY(-1);
+    projectionMatrix.loadIdentity();
+    modelMatrix.translateRelative(position.x, position.y);
+    const canvasRatio = canvasRect.height / canvasRect.width;
+    if (1 < canvasRatio) {
+      // モデルが横にはみ出る時は、HTMLキャンバスの幅で合わせる
+      modelMatrix.scale(1, canvasRect.width / canvasRect.height);
+    } else {
+      // モデルが上にはみ出る時は、HTMLキャンバスの高さで合わせる（スマホのランドスケープモードとか）
+      modelMatrix.scale(canvasRect.height / canvasRect.width, 1);
+    }
+    // モデルが良い感じの大きさになるように拡大・縮小
+    projectionMatrix.multiplyByMatrix(modelMatrix);
+    const scale = position.z;
+    projectionMatrix.scaleRelative(scale, scale);
+    model.getRenderer().setMvpMatrix(projectionMatrix);
+  };
+};
+
+const getParameterIds = (modelSetting: CubismModelSettingJson) => {
+  // 目パチのパラメーターIDを列挙
+  const eyeBlinks = [];
+  for (
+    let i = 0, len = modelSetting.getEyeBlinkParameterCount();
+    i < len;
+    i++
+  ) {
+    eyeBlinks.push(modelSetting.getEyeBlinkParameterId(i));
+  }
+
+  // 口パクのパラメーターIDを列挙
+  const lipSyncs = [];
+  for (let i = 0, len = modelSetting.getLipSyncParameterCount(); i < len; i++) {
+    lipSyncs.push(modelSetting.getLipSyncParameterId(i));
+  }
+
+  return {
+    eyeBlinks,
+    lipSyncs,
+  };
+};
+
+const createTexture = (
+  img: HTMLImageElement,
   gl: WebGLRenderingContext,
-): Promise<WebGLTexture> {
-  return new Promise((resolve: (texture: WebGLTexture) => void) => {
-    const url = URL.createObjectURL(blob);
-    const img: HTMLImageElement = new Image();
-    img.onload = () => {
-      const tex: WebGLTexture = gl.createTexture() as WebGLTexture;
+): WebGLTexture => {
+  const texture = gl.createTexture();
+  if (texture === null) throw new Error("Failed to create texture.");
 
-      // テクスチャを選択
-      gl.bindTexture(gl.TEXTURE_2D, tex);
+  // テクスチャを選択
+  gl.bindTexture(gl.TEXTURE_2D, texture);
 
-      gl.texParameteri(
-        gl.TEXTURE_2D,
-        gl.TEXTURE_MIN_FILTER,
-        gl.LINEAR_MIPMAP_LINEAR,
-      );
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(
+    gl.TEXTURE_2D,
+    gl.TEXTURE_MIN_FILTER,
+    gl.LINEAR_MIPMAP_LINEAR,
+  );
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-      // 乗算済みアルファ方式を使用する
-      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1);
+  // 乗算済みアルファ方式を使用する
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1);
 
-      // テクスチャにピクセルを書き込む
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+  // テクスチャにピクセルを書き込む
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
 
-      // ミップマップを生成
-      gl.generateMipmap(gl.TEXTURE_2D);
-      URL.revokeObjectURL(url);
-      return resolve(tex);
-    };
-    img.addEventListener("error", () => {
-      console.error(`image load error`);
-    });
-    img.src = url;
-  });
-}
+  // ミップマップを生成
+  gl.generateMipmap(gl.TEXTURE_2D);
+
+  return texture;
+};

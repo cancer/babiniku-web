@@ -3,11 +3,11 @@ import { CubismModelSettingJson } from "./Live2dSDK";
 
 const debug = $debug("app:live2d");
 
-type ModelData = {
+export type ModelData = {
   modelSetting: CubismModelSettingJson;
   moc3: ArrayBuffer;
   physics: ArrayBuffer;
-  textures: Blob[];
+  textures: HTMLImageElement[];
 };
 
 const modelDataCache: Map<string, ModelData> = new Map();
@@ -15,7 +15,7 @@ const modelDataCache: Map<string, ModelData> = new Map();
 /**
  * Live2Dモデルのバイナリ群を取得する
  */
-export const fetchModelData = async (modelName: string) => {
+export const fetchModelData = async (modelName: string): Promise<ModelData> => {
   const cached = modelDataCache.get(modelName);
   if (cached) {
     debug("modelDataCache hit.");
@@ -37,7 +37,7 @@ export const fetchModelData = async (modelName: string) => {
     fetchAsArrayBuffer(`${modelDir}/${modelSetting.getPhysicsFileName()}`),
     // テクスチャデータ
     Promise.all(
-      textureFiles.map((fileName) => fetchAsBlob(`${modelDir}/${fileName}`)),
+      textureFiles.map((fileName) => fetchAsImage(`${modelDir}/${fileName}`)),
     ),
   ]);
 
@@ -61,13 +61,22 @@ const fetchAsArrayBuffer = async (fileName: string) => {
   return res.arrayBuffer();
 };
 
-const fetchAsBlob = async (fileName: string) => {
+const fetchAsImage = async (fileName: string): Promise<HTMLImageElement> => {
   debug("fetch %s...", fileName);
   const res = await fetch(fileName);
 
   if (!res.ok) throw new Error("Failed to fetch.");
 
-  return res.blob();
+  const url = URL.createObjectURL(await res.blob());
+  const img = new Image();
+  return new Promise((resolve, reject) => {
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.addEventListener("error", () => reject());
+    img.src = url;
+  });
 };
 
 // モデルの設定ファイルを取得してModelSettingJsonインスタンスを返す
