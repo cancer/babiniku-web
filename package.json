@@ -16,9 +16,7 @@
     "@tensorflow/tfjs-converter": "4.10.0",
     "@tensorflow/tfjs-core": "4.10.0",
     "debug": "4.3.4",
-    "kalidokit": "1.1.5",
-    "pixi-live2d-display": "0.4.0",
-    "pixi.js": "6.5.9"
+    "kalidokit": "1.1.5"
   },
   "devDependencies": {
     "@types/debug": "4.1.9",
