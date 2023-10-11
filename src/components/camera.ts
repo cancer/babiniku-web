@@ -12,8 +12,6 @@ export const Camera = (props: Props) => {
   el.width = props.width;
   el.height = props.height;
 
-  el.appendChild(el);
-
   return {
     ref() {
       return el;
