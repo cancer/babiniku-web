@@ -20,5 +20,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["main.js", "src"]
+  "include": ["main.ts", "src"]
 }

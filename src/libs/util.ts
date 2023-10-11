@@ -1,6 +1,8 @@
-// @ts-check
-
-export const timer = () => {
+export type Timer = {
+  getDelta(): number;
+  lap(): void;
+};
+export const timer = (): Timer => {
   let lastUpdated = Date.now();
   return {
     getDelta() {
@@ -14,9 +16,6 @@ export const timer = () => {
 
 /**
  * 2点間の線形補間を求める
- *
- * @param {number} a
- * @param {number} b
- * @param {number} fraction
  */
-export const getLerp = (a, b, fraction) => (b - a) * fraction + a;
+export const getLerp = (a: number, b: number, fraction: number) =>
+  (b - a) * fraction + a;

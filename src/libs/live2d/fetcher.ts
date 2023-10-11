@@ -3,23 +3,23 @@ import { CubismModelSettingJson } from "./Live2dSDK";
 
 const debug = $debug("app:live2d");
 
-const modelDataCache = new Map();
+type ModelData = {
+  modelSetting: CubismModelSettingJson;
+  moc3: ArrayBuffer;
+  physics: ArrayBuffer;
+  textures: Blob[];
+};
+
+const modelDataCache: Map<string, ModelData> = new Map();
 
 /**
  * Live2Dモデルのバイナリ群を取得する
- *
- * @param {string} modelName
- * @return {Promise<{
- *   modelSetting: CubismModelSettingJson,
- *   moc3: ArrayBuffer;
- *   physics: ArrayBuffer;
- *   textures: Blob[];
- * }>}
  */
-export const fetchModelData = async (modelName) => {
-  if (modelDataCache.has(modelName)) {
+export const fetchModelData = async (modelName: string) => {
+  const cached = modelDataCache.get(modelName);
+  if (cached) {
     debug("modelDataCache hit.");
-    return modelDataCache.get(modelName);
+    return cached;
   }
 
   debug("fetchModelData %s...", modelName);
@@ -52,7 +52,7 @@ export const fetchModelData = async (modelName) => {
   return data;
 };
 
-const fetchAsArrayBuffer = async (fileName) => {
+const fetchAsArrayBuffer = async (fileName: string) => {
   debug("fetch %s...", fileName);
   const res = await fetch(fileName);
 
@@ -61,7 +61,7 @@ const fetchAsArrayBuffer = async (fileName) => {
   return res.arrayBuffer();
 };
 
-const fetchAsBlob = async (fileName) => {
+const fetchAsBlob = async (fileName: string) => {
   debug("fetch %s...", fileName);
   const res = await fetch(fileName);
 
@@ -71,7 +71,7 @@ const fetchAsBlob = async (fileName) => {
 };
 
 // モデルの設定ファイルを取得してModelSettingJsonインスタンスを返す
-const fetchModelSetting = async (fileName) => {
+const fetchModelSetting = async (fileName: string) => {
   const buf = await fetchAsArrayBuffer(fileName);
   return new CubismModelSettingJson(buf, buf.byteLength);
 };

@@ -1,8 +1,16 @@
+import type { Keypoint } from "@tensorflow-models/face-detection";
 import { bindModelToStage, render } from "../libs/live2d/index";
-import { fetchModelData } from "../libs/live2d/fetcher.js";
+import { fetchModelData } from "../libs/live2d/fetcher.ts";
 import { createStage } from "../libs/live2d/stage.js";
+import type { Timer } from "../libs/util.ts";
 
-export const Live2dStage = ({ keypoints, timer, id }) => {
+type Props = {
+  keypoints: Keypoint[];
+  timer: Timer;
+  id: string;
+  model: string;
+};
+export const Live2dStage = ({ keypoints, timer, id, model }: Props) => {
   // 描画ステージの作成
   const { canvas: el, gl } = createStage({
     id,
@@ -11,7 +19,7 @@ export const Live2dStage = ({ keypoints, timer, id }) => {
   });
   const viewport = [0, 0, el.width, el.height];
 
-  fetchModelData("/mao_pro_t02.model3.json")
+  fetchModelData(model)
     .then(({ modelSetting, ...binaries }) =>
       // Live2dモデルをWebGLのステージにバインド
       bindModelToStage(el, viewport, modelSetting, binaries, {
@@ -22,13 +30,13 @@ export const Live2dStage = ({ keypoints, timer, id }) => {
       }),
     )
 
-    .then(({model: modelContainer}) =>
+    .then(({ model: modelContainer }) =>
       // face detectionの結果に応じてモデルを動かす
       render(gl, viewport, modelContainer, keypoints, timer),
     );
 
   return {
-    render(app) {
+    render(app: HTMLElement) {
       const currentStage = app.querySelector(`#${id}`);
       if (currentStage) app.replaceChild(el, currentStage);
       else app.appendChild(el);

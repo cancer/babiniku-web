@@ -1,15 +1,23 @@
 import {
+  type Face,
   SupportedModels,
   util,
 } from "@tensorflow-models/face-landmarks-detection";
 
-export const FaceMeshStage = (props) => {
+type Props = {
+  faces: Face[];
+  id: string;
+  width: number;
+  height: number;
+};
+export const FaceMeshStage = (props: Props) => {
   const el = document.createElement("canvas");
   el.id = props.id;
   el.width = props.width;
   el.height = props.height;
 
   const ctx = el.getContext("2d");
+  if (ctx === null) throw new Error("Failed to get canvas context.");
 
   // 顔のパーツを描画する
   for (const face of props.faces) {
@@ -39,15 +47,15 @@ export const FaceMeshStage = (props) => {
   }
 
   return {
-    render(app) {
+    render(app: HTMLElement) {
       const currentStage = app.querySelector(`#${props.id}`);
       if (currentStage) app.replaceChild(el, currentStage);
       else app.appendChild(el);
-    }
-  }
+    },
+  };
 };
 
-const getPath = (points) => {
+const getPath = (points: number[][]) => {
   const path = new Path2D();
   path.moveTo(points[0][0], points[0][1]);
   for (let i = 1; i < points.length; i++) {

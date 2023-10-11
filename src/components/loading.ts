@@ -4,10 +4,10 @@ export const Loading = () => {
   el.innerHTML = "Detecting face...";
 
   return {
-    render(app) {
+    render(app: HTMLElement) {
       app.appendChild(el);
     },
-    destroy(app) {
+    destroy(app: HTMLElement) {
       if (app.querySelector("#loading") === null) return;
       app.removeChild(el);
     },

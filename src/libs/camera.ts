@@ -1,4 +1,8 @@
-export const provideCameraStream = (params) => {
+type Params = {
+  width: number;
+  height: number;
+};
+export const provideCameraStream = (params: Params) => {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
     throw new Error(
       "Browser API navigator.mediaDevices.getUserMedia not available",

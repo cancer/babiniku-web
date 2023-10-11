@@ -1,20 +1,17 @@
 import $debug from "debug";
 const debug = $debug("app:live2d");
 
-/**
- *
- * @param {{
- *   id: string;
- *   width: number;
- *   height: number;
- * }} params
- * @return {{canvas: HTMLCanvasElement; gl: WebGLRenderingContext}}
- */
-export const createStage = ({ id, width, height }) => {
-  const currentEl = document.getElementById(id);
+type CreateStage = (params: { id: string; width: number; height: number }) => {
+  canvas: HTMLCanvasElement;
+  gl: WebGLRenderingContext;
+};
+export const createStage: CreateStage = ({ id, width, height }) => {
+  const currentEl = document.querySelector<HTMLCanvasElement>(`canvas#${id}`);
   if (currentEl !== null) {
     debug("stage already exists.");
-    return { canvas: currentEl, gl: currentEl.getContext("webgl") };
+    const gl = currentEl.getContext("webgl");
+    if (gl === null) throw new Error("This browser does not support webgl.");
+    return { canvas: currentEl, gl };
   }
 
   debug("creating stage...");

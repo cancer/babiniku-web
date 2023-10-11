@@ -1,6 +1,7 @@
 import "@mediapipe/face_mesh";
 import "@tensorflow/tfjs-core";
 import "@tensorflow/tfjs-backend-webgl";
+import type { Keypoint } from "@tensorflow-models/face-detection";
 import {
   createDetector,
   SupportedModels,
@@ -8,7 +9,7 @@ import {
 import { calcHead } from "kalidokit/dist/FaceSolver/calcHead.js";
 import { calcEyes, calcPupils } from "kalidokit/dist/FaceSolver/calcEyes.js";
 import { calcMouth } from "kalidokit/dist/FaceSolver/calcMouth.js";
-import { Face } from "kalidokit";
+import { Face, type Results } from "kalidokit";
 
 export const provideDetector = () =>
   createDetector(SupportedModels.MediaPipeFaceMesh, {
@@ -16,17 +17,16 @@ export const provideDetector = () =>
     refineLandmarks: true,
   });
 
-/**
- * @param {import("@tensorflow-models/face-detection").Keypoint[]} keypoints
- */
-export const calcFace = (keypoints) => {
-  const head = calcHead(keypoints);
-  const pupils = calcPupils(keypoints);
-  const mouth = calcMouth(keypoints);
-  const eyes = calcEyes(keypoints);
+export const calcFace = (keypoints: Keypoint[]) => {
+  const head = calcHead(keypoints as unknown as Results);
+  const pupils = calcPupils(keypoints as unknown as Results);
+  const mouth = calcMouth(keypoints as unknown as Results);
+  const eyes = calcEyes(keypoints as unknown as Results);
 
   return { head, pupils, mouth, eyes };
 };
 
-export const stabilizeBlink = (eyeLerps, headY) =>
-  Face.stabilizeBlink(eyeLerps, headY);
+export const stabilizeBlink = (
+  eyeLerps: Record<string, number>,
+  headY: number,
+) => Face.stabilizeBlink(eyeLerps, headY);
