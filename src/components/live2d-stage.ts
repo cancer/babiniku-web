@@ -1,16 +1,23 @@
-import type { Keypoint } from "@tensorflow-models/face-detection";
+import type { Face } from "@tensorflow-models/face-detection";
 import { bindModelToStage, render } from "../libs/live2d/index";
 import { fetchModelData } from "../libs/live2d/fetcher.ts";
 import { createStage } from "../libs/live2d/stage.js";
 import type { Timer } from "../libs/util.ts";
 
 type Props = {
-  keypoints: Keypoint[];
   timer: Timer;
   id: string;
   model: string;
+  estimateFaces: () => Promise<Face[]>;
+  modelLoaded: () => void;
 };
-export const Live2dStage = ({ keypoints, timer, id, model }: Props) => {
+export const Live2dStage = ({
+  timer,
+  id,
+  model,
+  estimateFaces,
+  modelLoaded,
+}: Props) => {
   // 描画ステージの作成
   const { canvas: el, gl } = createStage({
     id,
@@ -29,10 +36,14 @@ export const Live2dStage = ({ keypoints, timer, id, model }: Props) => {
         scale: 3,
       }),
     )
-
     .then(({ model: modelContainer }) =>
       // face detectionの結果に応じてモデルを動かす
-      render(gl, viewport, modelContainer, keypoints, timer),
+      estimateFaces().then((faces) => {
+        modelLoaded();
+        // 顔が検出できてない
+        if (faces.length === 0) return;
+        return render(gl, viewport, modelContainer, faces[0].keypoints, timer);
+      }),
     );
 
   return {

@@ -48,32 +48,17 @@ let rafId: number | null = null;
 const loop = async () => {
   if (rafId !== null) cancelAnimationFrame(rafId);
 
-  if (camera === null) return;
-  if (detector === null) return;
-
   try {
-    debug("detecting faces...");
-    const faces = await detector.estimateFaces(camera.ref());
-    loading.destroy(app);
-    debug("face detected %o", faces);
-
-    // render
-    //const faceMeshStage = FaceMeshStage({
-    //  width: videoWidth,
-    //  height: videoHeight,
-    //  id: "faceMeshStage",
-    //  faces,
-    //});
-    //faceMeshStage.render(app);
-
-    // 顔が検出できない瞬間もある
-    if (faces.length === 0) return (rafId = requestAnimationFrame(loop));
-
     const props = {
-      keypoints: faces[0].keypoints,
       model: "/mao_pro_t02.model3.json",
       timer: _timer,
       id: "stage",
+      estimateFaces: () => {
+        if (camera === null) return Promise.resolve([]);
+        if (detector === null) return Promise.resolve([]);
+        return detector.estimateFaces(camera.ref());
+      },
+      modelLoaded: () => loading.destroy(app),
     };
     const live2dStage = Live2dStage(props);
     live2dStage.render(app);
