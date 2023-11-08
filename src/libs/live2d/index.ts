@@ -33,36 +33,24 @@ type ModelData = {
   textures: HTMLImageElement[];
 };
 const modelCache: Map<string, AppCubismUserModel> = new Map();
-const DEFAULT_POSITION = {
-  x: 0,
-  y: 0,
-  z: 1,
-};
 /**
  * Live2dモデルのロードと初期設定
  */
 type CreateModel = (params: {
   data: ModelData;
   position: Partial<{ x: number; y: number; z: number }>;
-}) => {
-  model: AppCubismUserModel;
-  resize: (canvasRect: { width: number; height: number }) => void;
-};
+}) => AppCubismUserModel;
 export const createModel: CreateModel = ({
   data: { modelSetting, moc3, physics },
-  position = DEFAULT_POSITION,
 }) => {
   const modelName = modelSetting.getModelFileName();
   const cachedModel = modelCache.get(modelName);
   if (cachedModel !== undefined) {
     debug("model cache hit. %o", cachedModel);
-    return {
-      model: cachedModel,
-      resize: getResizer(cachedModel, { ...DEFAULT_POSITION, ...position }),
-    };
+    return cachedModel;
   }
 
-  debug("createModel(%o)", { modelSetting, moc3, physics, position });
+  debug("createModel(%o)", { modelSetting, moc3, physics });
 
   const model = new AppCubismUserModel();
 
@@ -81,9 +69,39 @@ export const createModel: CreateModel = ({
   model.loadPhysics(physics, physics.byteLength);
 
   modelCache.set(modelName, model);
+  return model;
+};
+
+/**
+ * Live2Dモデルのサイズ調整用関数
+ */
+export const createResizer = (
+  model: AppCubismUserModel,
+  position: { x: number; y: number; z: number },
+) => {
+  const projectionMatrix = new CubismMatrix44();
   return {
-    model,
-    resize: getResizer(model, { ...DEFAULT_POSITION, ...position }),
+    resize(canvasRect: { width: number; height: number }) {
+      const modelMatrix = model.getModelMatrix();
+      modelMatrix.bottom(0);
+      modelMatrix.centerY(-1);
+      modelMatrix.translateY(-1);
+      projectionMatrix.loadIdentity();
+      modelMatrix.translateRelative(position.x, position.y);
+      const canvasRatio = canvasRect.height / canvasRect.width;
+      if (1 < canvasRatio) {
+        // モデルが横にはみ出る時は、HTMLキャンバスの幅で合わせる
+        modelMatrix.scale(1, canvasRect.width / canvasRect.height);
+      } else {
+        // モデルが上にはみ出る時は、HTMLキャンバスの高さで合わせる（スマホのランドスケープモードとか）
+        modelMatrix.scale(canvasRect.height / canvasRect.width, 1);
+      }
+      // モデルが良い感じの大きさになるように拡大・縮小
+      projectionMatrix.multiplyByMatrix(modelMatrix);
+      const scale = position.z;
+      projectionMatrix.scaleRelative(scale, scale);
+      model.getRenderer().setMvpMatrix(projectionMatrix);
+    },
   };
 };
 
@@ -302,37 +320,6 @@ export const render = (
 
   // タイマーの更新
   timer.lap();
-};
-
-/**
- * Live2Dモデルのサイズ調整用関数
- */
-const getResizer = (
-  model: AppCubismUserModel,
-  position: { x: number; y: number; z: number },
-) => {
-  const projectionMatrix = new CubismMatrix44();
-  return (canvasRect: { width: number; height: number }) => {
-    const modelMatrix = model.getModelMatrix();
-    modelMatrix.bottom(0);
-    modelMatrix.centerY(-1);
-    modelMatrix.translateY(-1);
-    projectionMatrix.loadIdentity();
-    modelMatrix.translateRelative(position.x, position.y);
-    const canvasRatio = canvasRect.height / canvasRect.width;
-    if (1 < canvasRatio) {
-      // モデルが横にはみ出る時は、HTMLキャンバスの幅で合わせる
-      modelMatrix.scale(1, canvasRect.width / canvasRect.height);
-    } else {
-      // モデルが上にはみ出る時は、HTMLキャンバスの高さで合わせる（スマホのランドスケープモードとか）
-      modelMatrix.scale(canvasRect.height / canvasRect.width, 1);
-    }
-    // モデルが良い感じの大きさになるように拡大・縮小
-    projectionMatrix.multiplyByMatrix(modelMatrix);
-    const scale = position.z;
-    projectionMatrix.scaleRelative(scale, scale);
-    model.getRenderer().setMvpMatrix(projectionMatrix);
-  };
 };
 
 const getParameterIds = (modelSetting: CubismModelSettingJson) => {
