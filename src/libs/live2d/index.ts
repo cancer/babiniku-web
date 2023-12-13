@@ -26,6 +26,8 @@ export const initializeCubism = () => {
   }
 };
 
+export const disposeCubism = () => CubismFramework.dispose();
+
 type ModelData = {
   modelSetting: CubismModelSettingJson;
   moc3: ArrayBuffer;

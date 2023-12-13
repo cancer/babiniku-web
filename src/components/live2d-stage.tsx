@@ -7,7 +7,7 @@ import {
   VoidComponent,
 } from "solid-js";
 import { ModelData } from "../libs/live2d/fetcher.ts";
-import { initializeCubism } from "../libs/live2d/index";
+import { disposeCubism, initializeCubism } from "../libs/live2d/index";
 import type { Timer } from "../libs/util.ts";
 import { PerfMonitor } from "./monitor.tsx";
 import { useLive2dModel } from "./use-live2d-model.ts";
@@ -24,7 +24,8 @@ export const Live2dStage: VoidComponent<Props> = (props) => {
   initializeCubism();
 
   const [stageRef, setStageRef] = createSignal<HTMLCanvasElement | null>(null);
-  const [{ error }, { initialize, updateKeypoints }] = useLive2dModel();
+  const [{ error }, { initialize, updateKeypoints, cleanup }] =
+    useLive2dModel();
 
   // モデルを初期化してWebGLにバインド
   createEffect(() => {
@@ -51,10 +52,15 @@ export const Live2dStage: VoidComponent<Props> = (props) => {
     onCleanup(() => cancelAnimationFrame(rafId));
   });
 
+  onCleanup(() => {
+    cleanup();
+    disposeCubism();
+  });
+
   return (
     <>
       <Show when={error}>{(err) => <div>{err().message}</div>}</Show>
-      <PerfMonitor canvas={stageRef()!}/>
+      <PerfMonitor canvas={stageRef()!} />
       <canvas ref={setStageRef} width="1280" height="960" />
     </>
   );

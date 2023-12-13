@@ -6,6 +6,7 @@ import {
   createResizer,
   render,
 } from "../libs/live2d";
+import AppCubismUserModel from "../libs/live2d/CubismModel.ts";
 import { type ModelData } from "../libs/live2d/fetcher.ts";
 import { type Timer } from "../libs/util.ts";
 
@@ -14,6 +15,7 @@ export const useLive2dModel = () => {
   const [renderer, setRenderer] = createSignal<(keypoints: Keypoint[]) => void>(
     () => {},
   );
+  const [model, setModel] = createSignal<AppCubismUserModel | null>(null);
   const [error, setError] = createSignal<Error | null>(null);
 
   // 座標が更新されたらモデルを再描画
@@ -70,12 +72,15 @@ export const useLive2dModel = () => {
         params.timer,
       );
     setRenderer(() => _render);
+    setModel(model);
 
     // 初回の顔検出が遅いので、とりあえず立ち絵を描画しとく
     _render([]);
   };
 
   const updateKeypoints = (keypoints: Keypoint[]) => setKeypoints(keypoints);
+  
+  const cleanup = () => model()?.release();
 
-  return [{ error: error() }, { initialize, updateKeypoints }] as const;
+  return [{ error: error() }, { initialize, updateKeypoints, cleanup }] as const;
 };
