@@ -9,6 +9,7 @@ import {
 import { ModelData } from "../libs/live2d/fetcher.ts";
 import { initializeCubism } from "../libs/live2d/index";
 import type { Timer } from "../libs/util.ts";
+import { PerfMonitor } from "./monitor.tsx";
 import { useLive2dModel } from "./use-live2d-model.ts";
 
 type Props = {
@@ -53,6 +54,7 @@ export const Live2dStage: VoidComponent<Props> = (props) => {
   return (
     <>
       <Show when={error}>{(err) => <div>{err().message}</div>}</Show>
+      <PerfMonitor canvas={stageRef()!}/>
       <canvas ref={setStageRef} width="1280" height="960" />
     </>
   );
