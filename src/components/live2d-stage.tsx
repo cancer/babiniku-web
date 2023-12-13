@@ -1,5 +1,13 @@
 import type { Keypoint } from "@tensorflow-models/face-detection";
-import { createEffect, createMemo, onCleanup, VoidComponent } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  onCleanup,
+  Show,
+  VoidComponent,
+} from "solid-js";
 import { ModelData } from "../libs/live2d/fetcher.ts";
 import {
   bindModelToStage,
@@ -9,6 +17,7 @@ import {
   render,
 } from "../libs/live2d/index";
 import type { Timer } from "../libs/util.ts";
+import { Loading } from "./loading.tsx";
 
 type Props = {
   timer: Timer;
@@ -21,7 +30,9 @@ export const Live2dStage: VoidComponent<Props> = (props) => {
   // modelを使ったりする前に読み込まなければいけない
   initializeCubism();
 
-  let stage: HTMLCanvasElement;
+  const [stageRef, setStageRef] = createSignal<HTMLCanvasElement | null>(null);
+  const gl = createMemo(() => stageRef()?.getContext("webgl") ?? null);
+
   const model = createMemo(() =>
     createModel({
       data: props.modelData,
@@ -32,53 +43,76 @@ export const Live2dStage: VoidComponent<Props> = (props) => {
     createResizer(model(), { x: 0, y: 0, z: 3 }),
   );
 
+  const [keypoints, { refetch: refetchKeypoints }] = createResource(() =>
+    props.acquireFaceRandMark(),
+  );
+
   // モデルをWebGLにバインド
   createEffect(() => {
-    if (stage === undefined) return;
-    const gl = stage.getContext("webgl");
-    if (gl === null) throw new Error("WebGL is not available.");
+    const _stage = stageRef();
+    if (_stage === null) return;
+    const _gl = gl();
+    if (_gl === null) return;
 
-    bindModelToStage(gl, model(), props.modelData.textures, [
+    bindModelToStage(_gl, model(), props.modelData.textures, [
       0,
       0,
-      stage.width,
-      stage.height,
+      _stage.width,
+      _stage.height,
     ]);
     resizer().resize({
-      width: stage.width,
-      height: stage.height,
+      width: _stage.width,
+      height: _stage.height,
     });
+    // 初回の検出が遅いので、とりあえず立ち絵をレンダリング
+    render(_gl, [0, 0, _stage.width, _stage.height], model(), [], props.timer);
+
     window.onresize = () => {
-      if (stage === null) return;
+      if (_stage === null) return;
       resizer().resize({
-        width: stage.width,
-        height: stage.height,
+        width: _stage.width,
+        height: _stage.height,
       });
     };
   });
 
-  // 毎フレーム顔を検出してモデルを動かす
+  // 毎フレーム顔を検出して座標を更新
   createEffect(() => {
-    if (stage === undefined) return;
-    const gl = stage.getContext("webgl");
-    if (gl === null) throw new Error("WebGL is not available.");
-
-    const loop = async () => {
-      rafId = requestAnimationFrame(async () => await loop());
-      const keypoints = await props.acquireFaceRandMark();
-      if (keypoints.length === 0) return;
-      render(
-        gl,
-        [0, 0, stage.width, stage.height],
-        model(),
-        keypoints,
-        props.timer,
-      );
+    const loop = () => {
+      rafId = requestAnimationFrame(() => loop());
+      if (keypoints.state !== "ready") return;
+      refetchKeypoints();
     };
 
-    let rafId = requestAnimationFrame(async () => await loop());
+    let rafId = requestAnimationFrame(() => loop());
     onCleanup(() => cancelAnimationFrame(rafId));
   });
 
-  return <canvas ref={stage!} width="1280" height="960" />;
+  // 座標が更新されたらモデルを再描画
+  createEffect(() => {
+    const _stage = stageRef();
+    if (_stage === null) return;
+    const _gl = gl();
+    if (_gl === null) return;
+    const _keypoints = keypoints();
+    if (!_keypoints) return;
+    if (_keypoints.length === 0) return;
+
+    render(
+      _gl,
+      [0, 0, _stage.width, _stage.height],
+      model(),
+      _keypoints,
+      props.timer,
+    );
+  });
+
+  return (
+    <>
+      <Show when={keypoints.state !== "ready" && keypoints.state !== "refreshing"}>
+        <Loading message="Detecting face landmark..." />
+      </Show>
+      <canvas ref={setStageRef} width="1280" height="960" />
+    </>
+  );
 };

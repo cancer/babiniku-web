@@ -1,3 +1,6 @@
 import { VoidComponent } from "solid-js";
 
-export const Loading: VoidComponent = () => <div>Detecting face...</div>;
+type Props = {
+  message: string;
+}
+export const Loading: VoidComponent<Props> = (props) => <div>{props.message}</div>;

@@ -45,7 +45,10 @@ export const App: VoidComponent = () => {
   onCleanup(() => detector()!.dispose());
 
   return (
-    <Show when={!loading() && modelData()} fallback={<Loading />}>
+    <Show
+      when={!loading() && modelData()}
+      fallback={<Loading message="Initializing app..." />}
+    >
       {(data) => (
         <Live2dStage
           timer={timer()}
