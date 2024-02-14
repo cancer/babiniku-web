@@ -1,21 +1,30 @@
-import "@mediapipe/face_mesh";
-import "@tensorflow/tfjs-core";
-import "@tensorflow/tfjs-backend-webgl";
-import type { Keypoint } from "@tensorflow-models/face-detection";
-import {
-  createDetector,
-  SupportedModels,
-} from "@tensorflow-models/face-landmarks-detection";
+import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import { calcHead } from "kalidokit/dist/FaceSolver/calcHead.js";
 import { calcEyes, calcPupils } from "kalidokit/dist/FaceSolver/calcEyes.js";
 import { calcMouth } from "kalidokit/dist/FaceSolver/calcMouth.js";
 import { Face, type Results } from "kalidokit";
 
-export const provideDetector = () =>
-  createDetector(SupportedModels.MediaPipeFaceMesh, {
-    runtime: "tfjs",
-    refineLandmarks: true,
+export interface Keypoint {
+  x: number;
+  y: number;
+  z?: number;
+}
+export const provideLandMarker = async () =>  {
+  const fileSet = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
+  );
+  const faceLandMarker = await FaceLandmarker.createFromOptions(fileSet, {
+    baseOptions: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+    },
+    runningMode: "VIDEO",
+    outputFaceBlendshapes: true,
+    numFaces: 1,
   });
+  
+  return faceLandMarker;
+}
 
 export const calcFace = (keypoints: Keypoint[]) => {
   const head = calcHead(keypoints as unknown as Results);

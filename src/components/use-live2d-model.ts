@@ -1,5 +1,5 @@
-import { type Keypoint } from "@tensorflow-models/face-detection";
 import { createEffect, createSignal } from "solid-js";
+import { Keypoint } from "../libs/face-detection.ts";
 import {
   bindModelToStage,
   createModel,

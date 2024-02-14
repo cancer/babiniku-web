@@ -1,7 +1,6 @@
-import type { Keypoint } from "@tensorflow-models/face-detection";
 import $debug from "debug";
 import { LogLevel } from "../cubism-web/Framework/live2dcubismframework";
-import { calcFace, stabilizeBlink } from "../face-detection.js";
+import { calcFace, Keypoint, stabilizeBlink } from "../face-detection.js";
 import { getLerp } from "../util.js";
 import AppCubismUserModel from "./CubismModel";
 import {

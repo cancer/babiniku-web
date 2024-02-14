@@ -1,4 +1,3 @@
-import type { Keypoint } from "@tensorflow-models/face-detection";
 import {
   createEffect,
   createSignal,
@@ -6,6 +5,7 @@ import {
   Show,
   VoidComponent,
 } from "solid-js";
+import { Keypoint } from "../libs/face-detection.ts";
 import { ModelData } from "../libs/live2d/fetcher.ts";
 import { disposeCubism, initializeCubism } from "../libs/live2d/index";
 import type { Timer } from "../libs/util.ts";
